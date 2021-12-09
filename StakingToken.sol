@@ -119,7 +119,7 @@ contract Stakeable is Ownable, ReentrancyGuard {
         }
     }
 
-    function calculateUserReward (address user) internal returns (uint256) {
+    function calculateUserReward (address user) internal view returns (uint256) {
         /*
             1) Get block number when user staked from 'userStakeBlock'
             2) Check if latest value of 'fromBlock' is equal to current block.number;
@@ -129,6 +129,28 @@ contract Stakeable is Ownable, ReentrancyGuard {
             // and for index == rewardPriceTrack.length-1 value to add will be ( (block.number - fromBlock) * rewardPerBlock)
             // if block.number - fromBlock equals zero then rewardPerBlock shall be added to total reward calculated. 
         */
+        uint256 userBlock = userStakeBlock[user];
+        uint256 latestRewardBlock = rewardPriceTrack[rewardPriceTrack.length - 1].fromBlock;
+        if (userBlock == block.number) return rewardPriceTrack[rewardPriceTrack.length - 1].rewardPerBlock * userStakeAmount[user];
+        else if (latestRewardBlock == block.number || userBlock > latestRewardBlock) {
+            return ((block.number - userBlock) * rewardPriceTrack[rewardPriceTrack.length - 1].rewardPerBlock) * userStakeAmount[user];
+        } else {
+            uint256 reward = 0;
+            uint rewardStartIndex = getRewardStartIndex(userBlock);
+            for (rewardStartIndex; rewardStartIndex < rewardPriceTrack.length - 1; rewardStartIndex++) {
+                reward += ((rewardPriceTrack[rewardStartIndex].toBlock - rewardPriceTrack[rewardStartIndex].fromBlock) * rewardPriceTrack[rewardStartIndex].rewardPerBlock) * userStakeAmount[user];
+            }
+            return reward;
+        }
+    }
+
+    function getRewardStartIndex (uint userBlock) internal view returns (uint) {
+        for (uint i = 0; i < rewardPriceTrack.length - 2; i++) {
+            if (rewardPriceTrack[i].fromBlock <= userBlock && rewardPriceTrack[i].toBlock >= userBlock) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     /*
@@ -182,9 +204,7 @@ contract Stakeable is Ownable, ReentrancyGuard {
 
     function claimReward () public isClaimable {
         uint256 reward = calculateUserReward(msg.sender);
-        // Calculate user reward
-
-        uint256 numberOfBlocks = (block.number - userStakeBlock[msg.sender]) > 0 ? (block.number - userStakeBlock[msg.sender]) : 1;
+        EBToken.transfer(msg.sender, reward);
         delete userStakeAmount[msg.sender];
         delete userStakeBlock[msg.sender];
         removeStakeHolder();
