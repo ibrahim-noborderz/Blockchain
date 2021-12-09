@@ -1,10 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.1;
 
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/security/ReentrancyGuard.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Address.sol";
+/*
+    Imports for Remix
+*/
+// import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
+// import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol";
+// import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/security/ReentrancyGuard.sol";
+// import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Address.sol";
+
+/*
+    Imports for local development
+*/
+import "openzeppelin-contracts/access/Ownable.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
+import "openzeppelin-contracts/utils/Address.sol";
 
 contract Stakeable is Ownable, ReentrancyGuard {
 
@@ -108,6 +119,18 @@ contract Stakeable is Ownable, ReentrancyGuard {
         }
     }
 
+    function calculateUserReward (address user) internal returns (uint256) {
+        /*
+            1) Get block number when user staked from 'userStakeBlock'
+            2) Check if latest value of 'fromBlock' is equal to current block.number;
+            // if so, latest 'rewardPerBlock' value shall apply to (block.number - userStakeBlock)
+            3) Else, get index where 'userStakeBlock' equals 'fromBlock' in 'rewardPriceTrack'
+            4) Start looping from index found in 3) reward shall be the sum of (toBlock - fromBlock) * rewardPerBlock
+            // and for index == rewardPriceTrack.length-1 value to add will be ( (block.number - fromBlock) * rewardPerBlock)
+            // if block.number - fromBlock equals zero then rewardPerBlock shall be added to total reward calculated. 
+        */
+    }
+
     /*
         Helper Methods End
     */
@@ -158,11 +181,14 @@ contract Stakeable is Ownable, ReentrancyGuard {
     }
 
     function claimReward () public isClaimable {
-        // uint numberOfBlocks = (block.number - rewards[msg.sender]) > 0 ? (block.number - rewards[msg.sender]) : 1;
-        // uint reward = (stakes[msg.sender] * numberOfBlocks) / rewardPerBlock;
+        uint256 reward = calculateUserReward(msg.sender);
+        // Calculate user reward
+
+        uint256 numberOfBlocks = (block.number - userStakeBlock[msg.sender]) > 0 ? (block.number - userStakeBlock[msg.sender]) : 1;
         delete userStakeAmount[msg.sender];
         delete userStakeBlock[msg.sender];
         removeStakeHolder();
+        emit Claimed(msg.sender, reward, block.timestamp);
     }
 
     /*
