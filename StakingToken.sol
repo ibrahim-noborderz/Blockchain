@@ -17,13 +17,17 @@ import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "openzeppelin-contracts/utils/Address.sol";
 
+// Importing Reward Token Smart Contract
+import "./EBToken.sol";
+
 contract Stakeable is Ownable, ReentrancyGuard {
 
     /*
         Variable Declaration Start
     */
 
-    IERC20 EBToken = IERC20(0xd9145CCE52D386f254917e481eB44e9943F39138);
+    // IERC20 EBToken = IERC20(0xd9145CCE52D386f254917e481eB44e9943F39138);
+    EBToken internal rewardToken; 
 
     struct RewardPriceTrack {
         uint256 rewardPerBlock;
@@ -44,6 +48,7 @@ contract Stakeable is Ownable, ReentrancyGuard {
     */
 
     constructor (uint256 initialReward) {
+        rewardToken = new EBToken();
         rewardPriceTrack.push(RewardPriceTrack(initialReward, block.number, 0));
     }
 
@@ -176,7 +181,7 @@ contract Stakeable is Ownable, ReentrancyGuard {
     }
 
     function injetRewardToken (uint256 amountInEther) onlyOwner public {
-        EBToken.transfer(address(EBToken), amountInEther * (10 ** 18));
+        rewardToken.mint(amountInEther * (10 ** 18));
         emit InjectedRewardTokens(msg.sender, amountInEther * (10 ** 18), block.timestamp);
     }
 
@@ -191,20 +196,20 @@ contract Stakeable is Ownable, ReentrancyGuard {
     function stake (address token, uint256 amount) public isAllowedToStake nonReentrant {
         require(isContract(token), "Provided address doesn't belong to a valid contract");
         require (amount > 0, "Cannot stake nothing");
-        require (EBToken.balanceOf(msg.sender) > amount, "Insufficient balance! Stake amount exceeds current balance");
+        require (rewardToken.balanceOf(msg.sender) > amount, "Insufficient balance! Stake amount exceeds current balance");
 
         userStakeAmount[msg.sender] += amount;
         userStakeBlock[msg.sender] = block.number;
         stakeholders.push(msg.sender);
 
-        EBToken.transferFrom(payable(msg.sender), payable(address(this)), amount);
+        rewardToken.transferFrom(payable(msg.sender), payable(address(this)), amount);
         emit TransferredFromUserToContract(msg.sender, amount, block.timestamp);
         emit Staked(msg.sender, amount, block.number, block.timestamp);
     }
 
     function claimReward () public isClaimable {
         uint256 reward = calculateUserReward(msg.sender);
-        EBToken.transfer(msg.sender, reward);
+        rewardToken.transfer(payable(msg.sender), reward);
         delete userStakeAmount[msg.sender];
         delete userStakeBlock[msg.sender];
         removeStakeHolder();
