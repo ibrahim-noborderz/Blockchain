@@ -35,7 +35,7 @@ contract Stakeable is Ownable, ReentrancyGuard {
         uint256 toBlock;
     }
 
-    RewardPriceTrack[] rewardPriceTrack;
+    RewardPriceTrack[] internal rewardPriceTrack;
 
     address[] internal stakeholders;
 
@@ -56,19 +56,19 @@ contract Stakeable is Ownable, ReentrancyGuard {
         Events Start
     */
 
-    event Staked (address indexed stakeholder, uint256 amount, uint onBlockNumber, uint256 timestamp);
+    event Staked (address indexed stakeholder, uint256 amount, uint onBlockNumber);
 
-    event Unstaked (address indexed stakeholder, uint256 reward, uint256 timestamp);
+    event Unstaked (address indexed stakeholder, uint256 reward, uint256 blockNumber);
 
-    event Claimed (address indexed stakeholder, uint256 reward, uint256 timestamp);
+    event Claimed (address indexed stakeholder, uint256 reward, uint256 blockNumber);
 
-    event TransferredFromUserToContract (address indexed user, uint256 amount, uint256 timestamp);
+    event TransferredFromUserToContract (address indexed user, uint256 amount, uint256 blockNumber);
 
-    event TransferredFromContractToUser (address indexed user, uint256 amount, uint256 timestamp);
+    event TransferredFromContractToUser (address indexed user, uint256 amount, uint256 blockNumber);
 
-    event InjectedRewardTokens (address indexed by, uint256 amount, uint256 timestamp);
+    event InjectedRewardTokens (address indexed by, uint256 amount, uint256 blockNumber);
 
-    event RewardPerBlockUpdated (address indexed by, uint256 rewardValue, uint256 timestamp);
+    event RewardPerBlockUpdated (address indexed by, uint256 rewardValue, uint256 blockNumber);
 
     /*
         Events End
@@ -166,23 +166,23 @@ contract Stakeable is Ownable, ReentrancyGuard {
         Admin Only Methods Start
     */
 
-    function getLatestRewardPerBlock () onlyOwner public view returns (uint256) {
+    function getLatestRewardPerBlock () public onlyOwner view returns (uint256) {
         return rewardPriceTrack[rewardPriceTrack.length - 1].rewardPerBlock;
     }
 
-    function getRewardHistory () onlyOwner public view returns (RewardPriceTrack[] memory) {
+    function getRewardHistory () public onlyOwner view returns (RewardPriceTrack[] memory) {
         return rewardPriceTrack;
     }
 
-    function setRewardPerBlock (uint256 rewardPerBlock) onlyOwner public {
+    function setRewardPerBlock (uint256 rewardPerBlock) public onlyOwner {
         rewardPriceTrack[rewardPriceTrack.length - 1].toBlock = block.number - 1;
         rewardPriceTrack.push(RewardPriceTrack(rewardPerBlock, block.number, 0));
-        emit RewardPerBlockUpdated(msg.sender, rewardPerBlock, block.timestamp);
+        emit RewardPerBlockUpdated(msg.sender, rewardPerBlock, block.number);
     }
 
-    function injetRewardToken (uint256 amountInEther) onlyOwner public {
+    function injetRewardToken (uint256 amountInEther) public onlyOwner {
         rewardToken.mintAmountAsEther(amountInEther);
-        emit InjectedRewardTokens(msg.sender, amountInEther * (10 ** 18), block.timestamp);
+        emit InjectedRewardTokens(msg.sender, amountInEther * (10 ** 18), block.number);
     }
 
     /*
@@ -193,37 +193,37 @@ contract Stakeable is Ownable, ReentrancyGuard {
         Public Methods Start
     */
 
-    function stake (address tokenAddress, uint256 amountInWei) public payable isAllowedToStake nonReentrant {
+    function stake (address tokenAddress, uint256 amountInWei) payable public isAllowedToStake nonReentrant {
         require(isContract(tokenAddress), "Provided address doesn't belong to a valid contract");
         require (amountInWei > 0, "Cannot stake nothing");
         IERC20 userToken = IERC20(tokenAddress);
         // Checking user balance
         require (userToken.balanceOf(msg.sender) > amountInWei, "Insufficient balance! Stake amount exceeds current balance");
         // Processing payment
-        require(userToken.transferFrom(payable(msg.sender), payable(address(this)), amountInWei), "Payment failed!!! Please make sure you've approved amount you want to stake and try again.");
-        emit TransferredFromUserToContract(msg.sender, amountInWei, block.timestamp);
+        require(userToken.transferFrom(msg.sender, address(this), amountInWei), "Payment failed!!! Please make sure you've approved amount you want to stake and try again.");
+        emit TransferredFromUserToContract(msg.sender, amountInWei, block.number);
 
         userStakeAmount[msg.sender] = amountInWei;
         userStakeBlock[msg.sender] = block.number;
         stakeholders.push(msg.sender);
-        emit Staked(msg.sender, amountInWei, block.number, block.timestamp);
+        emit Staked(msg.sender, amountInWei, block.number);
     }
 
-    function claimReward () public isClaimable {
+    function claimReward () payable public isClaimable nonReentrant {
         uint256 reward = calculateUserReward(msg.sender);
         // Minting number of reward tokens to be transferred to staker
         rewardToken.mintAmountAsWEI(reward);
-        emit InjectedRewardTokens(msg.sender, reward, block.timestamp);
+        emit InjectedRewardTokens(msg.sender, reward, block.number);
         // Approving reward tokens for staker
-        rewardToken.approve(payable(msg.sender), reward);
+        rewardToken.approve(msg.sender, reward);
         // Transferring reward to staker
-        rewardToken.transfer(payable(msg.sender), reward);
-        emit TransferredFromContractToUser(msg.sender, reward, block.timestamp);
+        rewardToken.transfer(msg.sender, reward);
+        emit TransferredFromContractToUser(msg.sender, reward, block.number);
         // Removing Staker's data
         delete userStakeAmount[msg.sender];
         delete userStakeBlock[msg.sender];
         removeStakeHolder();
-        emit Claimed(msg.sender, reward, block.timestamp);
+        emit Claimed(msg.sender, reward, block.number);
     }
 
     /*
