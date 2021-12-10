@@ -19,7 +19,7 @@ contract Voting is Ownable, ReentrancyGuard {
     }
 
     Voter[] private voters;
-    address private owner;
+    address private _owner;
 
     uint256 private votingStartTime = 0;
     uint256 private votingEndTime = 0;
@@ -30,7 +30,7 @@ contract Voting is Ownable, ReentrancyGuard {
     */
 
     constructor () {
-        owner = msg.sender;
+        _owner = msg.sender;
     }
 
     /*
@@ -54,7 +54,7 @@ contract Voting is Ownable, ReentrancyGuard {
     */
     modifier validateVoter () {
         // Prevent owner from voting himself 
-        require (msg.sender != owner, "Owner cannot cast votes!");
+        require (msg.sender != _owner, "Owner cannot cast votes!");
         
         bool isVoterValid = true;
 
@@ -121,7 +121,7 @@ contract Voting is Ownable, ReentrancyGuard {
         emit Voting_Reset(msg.sender, block.timestamp);
     }
 
-    function ShowVotersWithResults () public view onlyOwner votingEnded returns (Voter[] memory) {
+    function ShowVotersWithResults () public onlyOwner votingEnded returns (Voter[] memory) {
         emit Get_Voters(voters);
         return voters;
     }
@@ -141,23 +141,23 @@ contract Voting is Ownable, ReentrancyGuard {
         emit Vote_Casted(msg.sender, _vote, block.timestamp);
     }
 
-    function TotalVoters () public view votingEnded returns (uint256) {
+    function TotalVoters () public votingEnded returns (uint256) {
         emit Get_Total_Voters(msg.sender, voters.length, block.timestamp);
         return voters.length;
     }
 
-    function TotalVotes () public view votingEnded returns (uint256) {
+    function TotalVotes () public votingEnded returns (uint256) {
         uint256 totalVotes = votesInFavor + votesAgainst;
         emit Get_Total_Votes(msg.sender, totalVotes, block.timestamp);
         return totalVotes;
     }
 
-    function VotesInFavor () public view votingEnded returns (uint256) {
+    function VotesInFavor () public votingEnded returns (uint256) {
         emit Get_Votes_In_Favor(votesInFavor);
         return votesInFavor;
     }
 
-    function VotesAgainst () public view votingEnded returns (uint256) {
+    function VotesAgainst () public votingEnded returns (uint256) {
         emit Get_Votes_Against(votesAgainst);
         return votesAgainst;
     }
