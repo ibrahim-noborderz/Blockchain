@@ -27,7 +27,7 @@ contract Stakeable is Ownable, ReentrancyGuard {
     */
 
     // IERC20 EBToken = IERC20(0xd9145CCE52D386f254917e481eB44e9943F39138);
-    EBToken internal rewardToken; 
+    EBToken internal rewardToken;
 
     struct RewardPriceTrack {
         uint256 rewardPerBlock;
@@ -181,7 +181,7 @@ contract Stakeable is Ownable, ReentrancyGuard {
     }
 
     function injetRewardToken (uint256 amountInEther) onlyOwner public {
-        rewardToken.mint(amountInEther * (10 ** 18));
+        rewardToken.mintAmountAsEther(amountInEther);
         emit InjectedRewardTokens(msg.sender, amountInEther * (10 ** 18), block.timestamp);
     }
 
@@ -193,23 +193,33 @@ contract Stakeable is Ownable, ReentrancyGuard {
         Public Methods Start
     */
 
-    function stake (address token, uint256 amount) public isAllowedToStake nonReentrant {
-        require(isContract(token), "Provided address doesn't belong to a valid contract");
-        require (amount > 0, "Cannot stake nothing");
-        require (rewardToken.balanceOf(msg.sender) > amount, "Insufficient balance! Stake amount exceeds current balance");
+    function stake (address tokenAddress, uint256 amountInWei) public payable isAllowedToStake nonReentrant {
+        require(isContract(tokenAddress), "Provided address doesn't belong to a valid contract");
+        require (amountInWei > 0, "Cannot stake nothing");
+        IERC20 userToken = IERC20(tokenAddress);
+        // Checking user balance
+        require (userToken.balanceOf(msg.sender) > amountInWei, "Insufficient balance! Stake amount exceeds current balance");
+        // Processing payment
+        require(userToken.transferFrom(payable(msg.sender), payable(address(this)), amountInWei), "Payment failed!!! Please make sure you've approved amount you want to stake and try again.");
+        emit TransferredFromUserToContract(msg.sender, amountInWei, block.timestamp);
 
-        userStakeAmount[msg.sender] += amount;
+        userStakeAmount[msg.sender] = amountInWei;
         userStakeBlock[msg.sender] = block.number;
         stakeholders.push(msg.sender);
-
-        rewardToken.transferFrom(payable(msg.sender), payable(address(this)), amount);
-        emit TransferredFromUserToContract(msg.sender, amount, block.timestamp);
-        emit Staked(msg.sender, amount, block.number, block.timestamp);
+        emit Staked(msg.sender, amountInWei, block.number, block.timestamp);
     }
 
     function claimReward () public isClaimable {
         uint256 reward = calculateUserReward(msg.sender);
+        // Minting number of reward tokens to be transferred to staker
+        rewardToken.mintAmountAsWEI(reward);
+        emit InjectedRewardTokens(msg.sender, reward, block.timestamp);
+        // Approving reward tokens for staker
+        rewardToken.approve(payable(msg.sender), reward);
+        // Transferring reward to staker
         rewardToken.transfer(payable(msg.sender), reward);
+        emit TransferredFromContractToUser(msg.sender, reward, block.timestamp);
+        // Removing Staker's data
         delete userStakeAmount[msg.sender];
         delete userStakeBlock[msg.sender];
         removeStakeHolder();

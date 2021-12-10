@@ -16,11 +16,15 @@ import "openzeppelin-contracts/access/Ownable.sol";
 contract EBToken is ERC20, Ownable {
 
     constructor () ERC20("EB Token", "EBT") {
-        _mint(msg.sender, 1000000 * (10 ** 18));
+        _mint(address(this), 1000000 * (10 ** 18));
     }
 
-    function mint (uint256 amount) onlyOwner public {
-        _mint(msg.sender, amount * (10 ** 18));
+    function mintAmountAsEther (uint256 amount) onlyOwner public {
+        _mint(address(this), amount * (10 ** 18));
+    }
+
+    function mintAmountAsWEI (uint256 amount) onlyOwner public {
+        _mint(address(this), amount);
     }
 
     // function decimals () public view virtual override returns (uint8) {
