@@ -15,9 +15,8 @@ import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 contract ERC20Locker is Ownable, ReentrancyGuard {
 
     /******************* State Variables **********************/
-    /// @notice This variable tracks count of total records.
-    // uint private totalRecords = 0;
-    
+    // IERC20 token = IERC20("_token");
+
     /// @notice This struct stores information regarding locked tokens.
     struct LockedRecords {
         uint256 amount;
@@ -90,7 +89,7 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
     }
 
     modifier HasUserAlreadyLockedSameToken (address _token) {
-        require(userLockRecords[msg.sender][_token].doesExist, "You've already locked this token, please unlock them all before locking again.");
+        require(!userLockRecords[msg.sender][_token].doesExist, "You've already locked this token, please unlock them all before locking again.");
         _;
     }
 
@@ -136,6 +135,15 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
         supportedTokens[_token].updatedAt = block.timestamp;
     }
 
+    /******************* Private Methods **********************/
+    function lockUserFunds (address _token, uint _amount, uint validUntil) private nonReentrant {
+        IERC20 token = IERC20(_token);
+        token.transferFrom(msg.sender, address(this), _amount);
+        userLockRecords[msg.sender][_token] = LockedRecords(_amount, validUntil, payable(msg.sender), _token, true, block.timestamp, 0);
+        
+        emit Locked(msg.sender, _amount, _token, validUntil);
+    }
+
 
     /******************* Public Methods **********************/
     /// @notice This method locks `_amount` token(s) for `_time` months
@@ -143,19 +151,14 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
     /// @param _token Address of token that user wants to lock.
     /// @param _amount Number of token to be locked.
     /// @param _time Number of months for locking `_amount` token(s).
-    function lock (address _token, uint256 _amount, uint256 _time) public isContract(_token)
+    function lock (address _token, uint256 _amount, uint256 _time) public payable isContract(_token)
       ValidateLockParams(_amount, _time) IsSupportedToken(_token) 
       ValidateUserBalance(_token, _amount) HasUserAlreadyLockedSameToken(_token) {        
         
         /// @notice Please uncomment this line and comment out next line when need to be locked for `_time` months.
         // uint256 validUntil =  (_time * 30 days) + block.timestamp;
         uint256 validUntil =  (_time * 1 minutes) + block.timestamp; // For testing purpose, please comment this line.
-
-        IERC20 token = IERC20(_token);
-        token.transferFrom(msg.sender, address(this), _amount);
-        userLockRecords[msg.sender][_token] = LockedRecords(_amount, validUntil, payable(msg.sender), _token, true, block.timestamp, 0);
-        
-        emit Locked(msg.sender, _amount, _token, validUntil);
+        lockUserFunds(_token, _amount, validUntil);
     }
 
     /// @notice This method unlock user's all tokens for a given address
