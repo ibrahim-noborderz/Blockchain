@@ -15,8 +15,6 @@ import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 contract ERC20Locker is Ownable, ReentrancyGuard {
 
     /******************* State Variables **********************/
-    // IERC20 token = IERC20("_token");
-
     /// @notice This struct stores information regarding locked tokens.
     struct LockedRecords {
         uint256 amount;
@@ -42,8 +40,6 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
 
     /// @notice Following is a mapping where we map every locked token's information against a unique number.
     mapping (address => mapping(address => LockedRecords)) private userLockRecords;
-
-    constructor () {}
 
     /******************* Events **********************/
     event Locked(
@@ -136,6 +132,10 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
     }
 
     /******************* Private Methods **********************/
+    /// @notice This private method transfers `_amount` from user's account to this contract for locking purpose
+    /// @param _token Addess of user's ERC20 based token smart contract
+    /// @param _amount Amount of tokens/funds user wishes to lock
+    /// @param validUntil Amount of time for which user wishes to lock their funds.
     function lockUserFunds (address _token, uint _amount, uint validUntil) private nonReentrant {
         IERC20 token = IERC20(_token);
         token.transferFrom(msg.sender, address(this), _amount);
@@ -158,12 +158,13 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
         /// @notice Please uncomment this line and comment out next line when need to be locked for `_time` months.
         // uint256 validUntil =  (_time * 30 days) + block.timestamp;
         uint256 validUntil =  (_time * 1 minutes) + block.timestamp; // For testing purpose, please comment this line.
+        // Following call to private method solves, stack too deep compile time error.
         lockUserFunds(_token, _amount, validUntil);
     }
 
     /// @notice This method unlock user's all tokens for a given address
     /// @param _token Address of token to be unlocked
-    function unlockAll (address _token) public {
+    function unlockAll (address _token) public nonReentrant {
         if (userLockRecords[msg.sender][_token].addr == msg.sender && userLockRecords[msg.sender][_token].token == _token) {
             if (userLockRecords[msg.sender][_token].validity < block.timestamp) {
                 IERC20 token = IERC20(_token);
@@ -173,7 +174,7 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
 
                 emit Unlocked(
                     msg.sender, userLockRecords[msg.sender][_token].amount,
-                    userLockRecords[msg.sender][_token].token, block.timestamp
+                    _token, block.timestamp
                 );
 
             } else {
@@ -187,36 +188,40 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
     /// @notice This method unlock `_amount` tokens for a given token address
     /// @param _token Address of token to be unlocked
     /// @param _amount Amount of tokens to be unlocked
-    function unlock (address _token, uint256 _amount) public {
+    function unlock (address _token, uint256 _amount) public nonReentrant {
         if (userLockRecords[msg.sender][_token].addr == msg.sender && userLockRecords[msg.sender][_token].token == _token) {
-            if (userLockRecords[msg.sender][_token].amount >= _amount) {
-                if (userLockRecords[msg.sender][_token].validity <= block.timestamp) {
-                    IERC20 token = IERC20(_token);
-                    token.transfer(msg.sender, _amount);
-                    
-                    uint remainingBalance = userLockRecords[msg.sender][_token].amount - _amount;
-                    
+            if (userLockRecords[msg.sender][_token].validity <= block.timestamp) {
+                if (userLockRecords[msg.sender][_token].amount >= _amount) {
+                    uint remainingBalance = userLockRecords[msg.sender][_token].amount - _amount;  
+
                     if (remainingBalance == 0) delete userLockRecords[msg.sender][_token];
                     else userLockRecords[msg.sender][_token].amount = remainingBalance;
-                    emit Unlocked(msg.sender, userLockRecords[msg.sender][_token].amount, userLockRecords[msg.sender][_token].token, block.timestamp);
 
+                    IERC20 token = IERC20(_token);
+                    token.transfer(msg.sender, _amount);
+
+                    emit Unlocked(msg.sender, _amount, _token, block.timestamp);
                 } else {
-                    revert("You can not unlock funds right now!");
+                    revert(
+                        string (
+                            abi.encodePacked (
+                                "Amount you want to unlock exceeds your balance by ",
+                                _amount - userLockRecords[msg.sender][_token].amount,
+                                " tokens."
+                            )
+                        )
+                    );
                 }
             } else {
-                revert(
-                    string(
-                        abi.encodePacked(
-                            "Amount you want to unlock exceeds your balance by ",
-                            _amount - userLockRecords[msg.sender][_token].amount,
-                            " tokens."
-                        )
-                    )
-                );
+                revert("You can not unlock funds right now!");
             }
         } else {
             revert("You do not have any funds locked for the provided token address!");
         }
+    }
+
+    function checkFunds (address _token) public view returns (uint256) {
+        return userLockRecords[msg.sender][_token].amount;
     }
 
 }
