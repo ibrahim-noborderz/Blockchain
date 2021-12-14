@@ -1,57 +1,57 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.1;
 
-/*
-    Imports
-*/
+/******************* Imports **********************/
 import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "openzeppelin-contracts/access/Ownable.sol";
 
+/// @title A voting smart contract
+/// @author Ibrahim Iqbal Goraya
+/// @notice This smart contract serves as a voting pool where users can vote against or in favor of a query.
 contract Voting is Ownable, ReentrancyGuard {
 
-    /*
-        Variable Declaration Start
-    */
+    /******************* State Variables **********************/
+    /// @notice This struct stores information regarding voter and their balance and voting decision.
     struct Voter {
         address _address;
         uint256 isInFavor;
         uint256 balance;
     }
 
+    /// @notice An array to store and voters
     Voter[] private voters;
+
+    /// @notice Onwer's address.
     address private _owner;
 
+    /// @notice Stores voting start timestamp.
     uint256 private votingStartTime = 0;
+
+    /// @notice Stores voting end timestamp.
     uint256 private votingEndTime = 0;
+
+    /// @notice Stores total count of votes in favor of query.
     uint256 private votesInFavor = 0;
+
+    /// @notice Stores total count of votes against the query.
     uint256 private votesAgainst = 0;
-    /*
-        Variable Declaration End
-    */
 
     constructor () {
         _owner = msg.sender;
     }
 
-    /*
-        Events Start
-    */
-    event Voting_Started (address by, uint256 time);
-    event Voting_Ended (address by, uint256 total_votes ,uint256 time);
-    event Vote_Casted (address voter, uint256 decision, uint256 time);
-    event Voting_Reset (address by, uint256 time);
-    event Get_Voters (Voter[] voters);
-    event Get_Total_Votes (address viewer, uint256 votes, uint256 time);
-    event Get_Total_Voters (address viewer, uint256 voters, uint256 time);
-    event Get_Votes_In_Favor (uint256 votes_in_favor);
-    event Get_Votes_Against (uint256 votes_against);
-    /*
-        Events End
-    */
-
-    /*
-        Modifiers Start
-    */
+    /******************* Events **********************/
+    event VotingStarted (address by, uint256 time);
+    event VotingEnded (address by, uint256 totalVotes ,uint256 time);
+    event VoteCasted (address voter, uint256 decision, uint256 time);
+    event VotingReset (address by, uint256 time);
+    event GetVoters (Voter[] voters);
+    event GetTotalVotes (address viewer, uint256 votes, uint256 time);
+    event GetTotalVoters (address viewer, uint256 voters, uint256 time);
+    event GetVotesInFavor (uint256 votesInFavor);
+    event GetVotesAgainst (uint256 votesAgainst);
+    
+    /******************* Modifiers **********************/
     modifier validateVoter () {
         // Prevent owner from voting himself 
         require (msg.sender != _owner, "Owner cannot cast votes!");
@@ -84,14 +84,33 @@ contract Voting is Ownable, ReentrancyGuard {
         require (block.timestamp <= votingEndTime, "Voting has ended!");
         _;
     }
-    /*
-        Modifiers End
-    */
 
-    /*
-        Admin methods start
-    */
+    /******************* Admin Methods **********************/
+    function startVoting () public onlyOwner {
+        require(votingStartTime == 0, "Voting has already started");
+        votingStartTime = block.timestamp;
+        emit VotingStarted(msg.sender, block.timestamp);
+    }
 
+    function endVoting () public onlyOwner votingStarted {
+        votingEndTime = block.timestamp;
+        calculateResults();
+        emit VotingEnded(msg.sender, votesInFavor + votesAgainst, block.timestamp);
+    }
+
+    function reset () public onlyOwner votingEnded {
+        votingStartTime = 0;
+        votingEndTime = 0;
+        delete voters;
+        emit VotingReset(msg.sender, block.timestamp);
+    }
+
+    function showVotersWithResults () public onlyOwner votingEnded returns (Voter[] memory) {
+        emit GetVoters(voters);
+        return voters;
+    }
+
+    /******************* Private Methods **********************/
     function calculateResults () private {
         for (uint256 i = 0; i < voters.length; i++) {
             if (voters[i].isInFavor == 1) {
@@ -102,67 +121,37 @@ contract Voting is Ownable, ReentrancyGuard {
         }
     }
 
-    function startVoting () public onlyOwner {
-        require(votingStartTime == 0, "Voting has already started");
-        votingStartTime = block.timestamp;
-        emit Voting_Started(msg.sender, block.timestamp);
-    }
-
-    function endVoting () public onlyOwner votingStarted {
-        votingEndTime = block.timestamp;
-        calculateResults();
-        emit Voting_Ended(msg.sender, votesInFavor + votesAgainst, block.timestamp);
-    }
-
-    function reset () public onlyOwner votingEnded {
-        votingStartTime = 0;
-        votingEndTime = 0;
-        delete voters;
-        emit Voting_Reset(msg.sender, block.timestamp);
-    }
-
-    function ShowVotersWithResults () public onlyOwner votingEnded returns (Voter[] memory) {
-        emit Get_Voters(voters);
-        return voters;
-    }
-    /*
-        Admin methods end
-    */
-
-    /*
-        User/Public methods start
-    */
-
-    function Vote (uint256 _vote) public votingStarted validateVoter validateVoting {
+    /******************* Public Methods **********************/
+    function vote (uint256 _vote) public votingStarted validateVoter validateVoting {
         // Validating input
         require (_vote >= 0 && _vote <= 1,
         "Please enter either 0 for No or 1 for Yes ");
         voters.push(Voter(msg.sender, _vote, (msg.sender).balance));
-        emit Vote_Casted(msg.sender, _vote, block.timestamp);
+        emit VoteCasted(msg.sender, _vote, block.timestamp);
     }
 
-    function TotalVoters () public votingEnded returns (uint256) {
-        emit Get_Total_Voters(msg.sender, voters.length, block.timestamp);
+    function totalVoters () public votingEnded returns (uint256) {
+        emit GetTotalVoters(msg.sender, voters.length, block.timestamp);
         return voters.length;
     }
 
-    function TotalVotes () public votingEnded returns (uint256) {
+    function getTotalVotes () public votingEnded returns (uint256) {
         uint256 totalVotes = votesInFavor + votesAgainst;
-        emit Get_Total_Votes(msg.sender, totalVotes, block.timestamp);
+        emit GetTotalVotes(msg.sender, totalVotes, block.timestamp);
         return totalVotes;
     }
 
-    function VotesInFavor () public votingEnded returns (uint256) {
-        emit Get_Votes_In_Favor(votesInFavor);
+    function voteInFavor () public votingEnded returns (uint256) {
+        emit GetVotesInFavor(votesInFavor);
         return votesInFavor;
     }
 
-    function VotesAgainst () public votingEnded returns (uint256) {
-        emit Get_Votes_Against(votesAgainst);
+    function voteAgainst () public votingEnded returns (uint256) {
+        emit GetVotesAgainst(votesAgainst);
         return votesAgainst;
     }
 
-    function GetVotingResults () public view returns (string memory) {
+    function getVotingResults () public view returns (string memory) {
         if (votesInFavor > votesAgainst) {
             return "Majority is in Favor, Candidate WON!!!";
         } else if (votesInFavor < votesAgainst) {
@@ -171,9 +160,4 @@ contract Voting is Ownable, ReentrancyGuard {
             return "Equal worth of votes on both sides, It's a DRAW!!!";
         }
     }
-
-    /*
-        User/Public methods end
-    */
-
 }
