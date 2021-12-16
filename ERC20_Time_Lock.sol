@@ -154,10 +154,9 @@ contract ERC20Locker is Ownable, ReentrancyGuard {
     function lock (address _token, uint256 _amount, uint256 _time) public payable isContract(_token)
       ValidateLockParams(_amount, _time) IsSupportedToken(_token) 
       ValidateUserBalance(_token, _amount) HasUserAlreadyLockedSameToken(_token) {        
-        
         /// @notice Please uncomment this line and comment out next line when need to be locked for `_time` months.
-        // uint256 validUntil =  (_time * 30 days) + block.timestamp;
-        uint256 validUntil =  (_time * 1 minutes) + block.timestamp; // For testing purpose, please comment this line.
+        uint256 validUntil =  (_time * 30 days) + block.timestamp;
+        // uint256 validUntil =  (_time * 1 minutes) + block.timestamp; // For testing purpose, please comment this line.
         // Following call to private method solves, stack too deep compile time error.
         lockUserFunds(_token, _amount, validUntil);
     }
